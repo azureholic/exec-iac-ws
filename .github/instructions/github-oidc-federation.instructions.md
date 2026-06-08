@@ -20,9 +20,16 @@ wrong.
   - **`Owner`** on its **own workload resource group** — needed because a deploy creates role
     assignments (e.g. granting `AcrPull` to runtime identities). `User Access Administrator`
     + `Contributor` is an acceptable split; subscription-level scope is not.
-  - **`Network Contributor`** on the **hub VNet resource** (not the hub resource group) — to
-    write the spoke→hub peering.
+  - **`Network Contributor`** on the **hub resource group** — needed both to write the
+    spoke→hub peering on the hub VNet *and* because the AVM `virtualNetwork` module creates
+    the **remote** peering via a nested deployment in the hub RG, which requires
+    `Microsoft.Resources/deployments/write` at RG scope. Scoping to just the VNet resource
+    fails with `AuthorizationFailed` on `<deploymentName>-virtualNetworkPeering-remote-0`.
   - **`AcrPush`** on the **workload container registry** — used by the app build job.
+  - **(`prod` only) `AcrPull` on the *test* container registry** — `az acr import` runs under
+    the prod identity but reads the manifest from the test registry. Without this the import
+    fails with `HTTP 401 UNAUTHORIZED` on the source. Granting it preserves build-once,
+    promote-everywhere (no rebuild for prod).
 
 ## Federated credential — get the subject exactly right
 

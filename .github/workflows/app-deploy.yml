@@ -152,7 +152,11 @@ jobs:
           web_image="${{ needs.build.outputs.web_image }}"
 
           dep=$(az deployment group list -g "$rg" \
-            --query "sort_by([?properties.provisioningState=='Succeeded'], &properties.timestamp)[-1].name" -o tsv)
+            --query "sort_by([?properties.provisioningState=='Succeeded' && starts_with(name, 'spoke-test-')], &properties.timestamp)[-1].name" -o tsv)
+          if [ -z "$dep" ] || [ "$dep" = "None" ]; then
+            echo "::error::No succeeded 'spoke-test-*' deployment found in $rg. Run infra-deploy.yml first."
+            exit 1
+          fi
           outputs=$(az deployment group show -g "$rg" -n "$dep" --query properties.outputs -o json)
           api_app=$(echo "$outputs" | jq -r .apiContainerAppName.value)
           web_app=$(echo "$outputs" | jq -r .webContainerAppName.value)
@@ -217,7 +221,11 @@ jobs:
           set -euo pipefail
           rg="${{ vars.AZURE_RESOURCE_GROUP }}"
           dep=$(az deployment group list -g "$rg" \
-            --query "sort_by([?properties.provisioningState=='Succeeded'], &properties.timestamp)[-1].name" -o tsv)
+            --query "sort_by([?properties.provisioningState=='Succeeded' && starts_with(name, 'spoke-prod-')], &properties.timestamp)[-1].name" -o tsv)
+          if [ -z "$dep" ] || [ "$dep" = "None" ]; then
+            echo "::error::No succeeded 'spoke-prod-*' deployment found in $rg. Run infra-deploy.yml first."
+            exit 1
+          fi
           outputs=$(az deployment group show -g "$rg" -n "$dep" --query properties.outputs -o json)
           registry_name=$(echo "$outputs" | jq -r .containerRegistryName.value)
           login_server=$(echo "$outputs" | jq -r .containerRegistryLoginServer.value)

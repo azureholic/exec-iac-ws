@@ -12,8 +12,14 @@
          workload resource group, named id-github-<WorkloadName>-<env>-<loc>-001.
       2. Assigns the deploy identity:
            - Owner on the workload RG
-           - Network Contributor on the hub VNet resource (not the hub RG)
+           - Network Contributor on the hub RG (needed because AVM's
+             virtualNetwork module creates the remote peering via a nested
+             deployment in the hub RG, which requires deployments/write
+             at RG scope)
            - AcrPush on the workload container registry
+           - (prod only) AcrPull on the *test* container registry so
+             `az acr import` can copy the digest from test → prod
+             without a rebuild (build-once-promote-everywhere).
          az role assignment create is naturally idempotent — re-running on the
          same scope+principal+role returns success without duplicating.
       3. Creates or updates a federated credential whose subject is exactly
@@ -184,10 +190,15 @@ foreach ($env in $Environment) {
     }
     $acrId = (Invoke-AzJson @('acr', 'show', '-n', $resolvedAcrName, '-g', $resolvedAcrRg, '--query', 'id', '-o', 'json'))
 
-    # Resolve hub vnet resource id.
+    # Resolve hub vnet + hub RG resource ids. Network Contributor is scoped to
+    # the hub RG (not just the vnet) because the AVM virtualNetwork module
+    # creates the *remote* peering through a nested deployment in the hub RG,
+    # which needs Microsoft.Resources/deployments/write at RG scope.
     $hubVnetId = (Invoke-AzJson @('network', 'vnet', 'show', '-g', $HubResourceGroup, '-n', $HubVnetName, '--query', 'id', '-o', 'json'))
+    $hubRgId   = (Invoke-AzJson @('group',   'show', '-n', $HubResourceGroup, '--query', 'id', '-o', 'json'))
 
     Write-Host "  Workload RG  : $workloadRg"
+    Write-Host "  Hub RG       : $hubRgId"
     Write-Host "  Hub VNet     : $hubVnetId"
     Write-Host "  ACR          : $resolvedAcrName ($resolvedAcrRg)"
 
@@ -217,9 +228,9 @@ foreach ($env in $Environment) {
 
     # 2. Role assignments ------------------------------------------------------
     $roleAssignments = @(
-        @{ Role = 'Owner';               Scope = $rgScope;   Label = "Owner on $workloadRg" }
-        @{ Role = 'Network Contributor'; Scope = $hubVnetId; Label = 'Network Contributor on hub vnet' }
-        @{ Role = 'AcrPush';             Scope = $acrId;     Label = "AcrPush on $resolvedAcrName" }
+        @{ Role = 'Owner';               Scope = $rgScope; Label = "Owner on $workloadRg" }
+        @{ Role = 'Network Contributor'; Scope = $hubRgId; Label = "Network Contributor on $HubResourceGroup" }
+        @{ Role = 'AcrPush';             Scope = $acrId;   Label = "AcrPush on $resolvedAcrName" }
     )
     foreach ($ra in $roleAssignments) {
         Write-Host "  - role       : $($ra.Label)"
@@ -240,6 +251,38 @@ foreach ($env in $Environment) {
         )
         if (-not $existing -or $existing.Count -eq 0) {
             throw "Failed to ensure role assignment '$($ra.Role)' on $($ra.Scope) for $principalId."
+        }
+    }
+
+    # 2b. Cross-env AcrPull on the test ACR for the prod identity ------------
+    # `az acr import` (build-once-promote-everywhere) is run by the prod
+    # identity but pulls the manifest from the *test* registry. Without
+    # AcrPull on the source the import fails with HTTP 401 UNAUTHORIZED.
+    if ($env -eq 'prod') {
+        $testWorkloadRg = "rg-$WorkloadName-test"
+        $testAcrList = & az acr list -g $testWorkloadRg -o json 2>$null | ConvertFrom-Json
+        if ($testAcrList -and $testAcrList.Count -ge 1) {
+            $testAcrId = $testAcrList[0].id
+            Write-Host "  - role       : AcrPull on $($testAcrList[0].name) (test ACR, import source)"
+            & az role assignment create `
+                --assignee-object-id $principalId `
+                --assignee-principal-type ServicePrincipal `
+                --role AcrPull `
+                --scope $testAcrId `
+                --output none 2>&1 | Out-Null
+            $existingPull = Invoke-AzJson @(
+                'role', 'assignment', 'list',
+                '--assignee', $principalId,
+                '--role', 'AcrPull',
+                '--scope', $testAcrId,
+                '-o', 'json'
+            )
+            if (-not $existingPull -or $existingPull.Count -eq 0) {
+                throw "Failed to ensure AcrPull on test ACR ($testAcrId) for $principalId."
+            }
+        }
+        else {
+            Write-Host "  - role       : (skipped) no test ACR in $testWorkloadRg yet; re-run bootstrap after test is deployed." -ForegroundColor Yellow
         }
     }
 
