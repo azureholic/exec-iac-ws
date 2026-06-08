@@ -1,0 +1,276 @@
+name: App — build and promote
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'workload-app/**'
+      - '.github/workflows/app-deploy.yml'
+  workflow_dispatch:
+    inputs:
+      api_image:
+        description: 'Optional API image ref to redeploy (e.g. <acr>.azurecr.io/hotelapi@sha256:...). Skips API build.'
+        required: false
+        default: ''
+      web_image:
+        description: 'Optional WEB image ref to redeploy (e.g. <acr>.azurecr.io/hotelweb@sha256:...). Skips WEB build.'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app-deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  API_REPO: hotelapi
+  WEB_REPO: hotelweb
+  API_CONTEXT: workload-app/backend/HotelBooking.Api
+  API_DOCKERFILE: workload-app/backend/HotelBooking.Api/Dockerfile
+  WEB_CONTEXT: workload-app/frontend
+  WEB_DOCKERFILE: workload-app/frontend/Dockerfile
+
+jobs:
+  build:
+    name: Build images (once)
+    runs-on: ubuntu-latest
+    # Build runs against the TEST registry. The same digest is later imported
+    # into the prod registry — no rebuild for prod (build-once contract).
+    environment: test
+    permissions:
+      id-token: write
+      contents: read
+    outputs:
+      api_image: ${{ steps.publish.outputs.api_image }}
+      web_image: ${{ steps.publish.outputs.web_image }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Discover test ACR
+        id: discover
+        run: |
+          set -euo pipefail
+          rg="${{ vars.AZURE_RESOURCE_GROUP }}"
+          registry_name=$(az acr list -g "$rg" --query '[0].name' -o tsv)
+          if [ -z "$registry_name" ]; then
+            echo "No ACR found in $rg" >&2
+            exit 1
+          fi
+          login_server=$(az acr show -n "$registry_name" --query loginServer -o tsv)
+          echo "registry_name=$registry_name"   >> "$GITHUB_OUTPUT"
+          echo "login_server=$login_server"     >> "$GITHUB_OUTPUT"
+
+      - name: Build & push API image
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.api_image == '' }}
+        run: |
+          az acr build \
+            --registry "${{ steps.discover.outputs.registry_name }}" \
+            --image "${{ env.API_REPO }}:${{ github.sha }}" \
+            --file "${{ env.API_DOCKERFILE }}" \
+            "${{ env.API_CONTEXT }}"
+
+      - name: Build & push WEB image
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.web_image == '' }}
+        run: |
+          az acr build \
+            --registry "${{ steps.discover.outputs.registry_name }}" \
+            --image "${{ env.WEB_REPO }}:${{ github.sha }}" \
+            --file "${{ env.WEB_DOCKERFILE }}" \
+            "${{ env.WEB_CONTEXT }}"
+
+      - name: Resolve digests and publish outputs
+        id: publish
+        run: |
+          set -euo pipefail
+          registry_name="${{ steps.discover.outputs.registry_name }}"
+          login_server="${{ steps.discover.outputs.login_server }}"
+
+          if [ -n "${{ inputs.api_image }}" ]; then
+            api_image="${{ inputs.api_image }}"
+          else
+            api_digest=$(az acr repository show \
+              --name "$registry_name" \
+              --image "${{ env.API_REPO }}:${{ github.sha }}" \
+              --query digest -o tsv)
+            api_image="${login_server}/${{ env.API_REPO }}@${api_digest}"
+          fi
+
+          if [ -n "${{ inputs.web_image }}" ]; then
+            web_image="${{ inputs.web_image }}"
+          else
+            web_digest=$(az acr repository show \
+              --name "$registry_name" \
+              --image "${{ env.WEB_REPO }}:${{ github.sha }}" \
+              --query digest -o tsv)
+            web_image="${login_server}/${{ env.WEB_REPO }}@${web_digest}"
+          fi
+
+          echo "api_image=$api_image" >> "$GITHUB_OUTPUT"
+          echo "web_image=$web_image" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## Built images"
+            echo
+            echo "- API: \`$api_image\`"
+            echo "- WEB: \`$web_image\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy-test:
+    name: Deploy → test
+    runs-on: ubuntu-latest
+    needs: build
+    environment: test
+    permissions:
+      id-token: write
+      contents: read
+    outputs:
+      web_fqdn: ${{ steps.deploy.outputs.web_fqdn }}
+    steps:
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Roll out test container apps
+        id: deploy
+        run: |
+          set -euo pipefail
+          rg="${{ vars.AZURE_RESOURCE_GROUP }}"
+          api_image="${{ needs.build.outputs.api_image }}"
+          web_image="${{ needs.build.outputs.web_image }}"
+
+          dep=$(az deployment group list -g "$rg" \
+            --query "sort_by([?properties.provisioningState=='Succeeded'], &properties.timestamp)[-1].name" -o tsv)
+          outputs=$(az deployment group show -g "$rg" -n "$dep" --query properties.outputs -o json)
+          api_app=$(echo "$outputs" | jq -r .apiContainerAppName.value)
+          web_app=$(echo "$outputs" | jq -r .webContainerAppName.value)
+
+          az containerapp update -g "$rg" -n "$api_app" --image "$api_image" --output none
+          az containerapp update -g "$rg" -n "$web_app" --image "$web_image" --output none
+
+          web_fqdn=$(az containerapp show -g "$rg" -n "$web_app" \
+            --query properties.configuration.ingress.fqdn -o tsv)
+          echo "web_fqdn=$web_fqdn" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## Deployed → test"
+            echo "- API: \`$api_image\`"
+            echo "- WEB: \`$web_image\`"
+            echo "- URL: https://$web_fqdn"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  smoke-test:
+    name: Smoke test (test)
+    runs-on: ubuntu-latest
+    needs: deploy-test
+    steps:
+      - name: HTTP probe
+        run: |
+          set -euo pipefail
+          url="https://${{ needs.deploy-test.outputs.web_fqdn }}/"
+          echo "Probing $url"
+          code=000
+          for i in 1 2 3 4 5 6; do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 "$url" || echo 000)
+            if [ "$code" = "200" ]; then
+              echo "OK ($code) on attempt $i"
+              echo "## Smoke test: PASS ($url returned 200)" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            echo "attempt $i: HTTP $code — retrying in 10s"
+            sleep 10
+          done
+          echo "## Smoke test: FAIL ($url last HTTP $code)" >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+
+  deploy-prod:
+    name: Deploy → prod
+    runs-on: ubuntu-latest
+    needs: [build, smoke-test]
+    environment: prod
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Discover prod ACR and apps
+        id: discover
+        run: |
+          set -euo pipefail
+          rg="${{ vars.AZURE_RESOURCE_GROUP }}"
+          dep=$(az deployment group list -g "$rg" \
+            --query "sort_by([?properties.provisioningState=='Succeeded'], &properties.timestamp)[-1].name" -o tsv)
+          outputs=$(az deployment group show -g "$rg" -n "$dep" --query properties.outputs -o json)
+          registry_name=$(echo "$outputs" | jq -r .containerRegistryName.value)
+          login_server=$(echo "$outputs" | jq -r .containerRegistryLoginServer.value)
+          api_app=$(echo "$outputs" | jq -r .apiContainerAppName.value)
+          web_app=$(echo "$outputs" | jq -r .webContainerAppName.value)
+          echo "registry_name=$registry_name" >> "$GITHUB_OUTPUT"
+          echo "login_server=$login_server"   >> "$GITHUB_OUTPUT"
+          echo "api_app=$api_app"             >> "$GITHUB_OUTPUT"
+          echo "web_app=$web_app"             >> "$GITHUB_OUTPUT"
+
+      - name: Import digests test → prod (no rebuild)
+        id: promote
+        run: |
+          set -euo pipefail
+          # az acr import is a digest-preserving copy. The manifest digest in
+          # the destination registry is identical to the source — no rebuild.
+          api_src="${{ needs.build.outputs.api_image }}"
+          web_src="${{ needs.build.outputs.web_image }}"
+          api_digest="@${api_src#*@}"
+          web_digest="@${web_src#*@}"
+          api_tag="${{ env.API_REPO }}:${{ github.sha }}"
+          web_tag="${{ env.WEB_REPO }}:${{ github.sha }}"
+
+          az acr import \
+            --name "${{ steps.discover.outputs.registry_name }}" \
+            --source "$api_src" \
+            --image  "$api_tag" \
+            --force
+          az acr import \
+            --name "${{ steps.discover.outputs.registry_name }}" \
+            --source "$web_src" \
+            --image  "$web_tag" \
+            --force
+
+          api_prod_image="${{ steps.discover.outputs.login_server }}/${{ env.API_REPO }}${api_digest}"
+          web_prod_image="${{ steps.discover.outputs.login_server }}/${{ env.WEB_REPO }}${web_digest}"
+          echo "api_image=$api_prod_image" >> "$GITHUB_OUTPUT"
+          echo "web_image=$web_prod_image" >> "$GITHUB_OUTPUT"
+
+      - name: Roll out prod container apps
+        run: |
+          set -euo pipefail
+          rg="${{ vars.AZURE_RESOURCE_GROUP }}"
+          api_image="${{ steps.promote.outputs.api_image }}"
+          web_image="${{ steps.promote.outputs.web_image }}"
+
+          az containerapp update -g "$rg" -n "${{ steps.discover.outputs.api_app }}" --image "$api_image" --output none
+          az containerapp update -g "$rg" -n "${{ steps.discover.outputs.web_app }}" --image "$web_image" --output none
+
+          {
+            echo "## Deployed → prod"
+            echo "- API: \`$api_image\`"
+            echo "- WEB: \`$web_image\`"
+            echo
+            echo "Digests preserved from test (build-once, promote-everywhere)."
+          } >> "$GITHUB_STEP_SUMMARY"
