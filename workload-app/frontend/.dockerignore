@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.vite/
+.cache/
+.vscode/
+.idea/
+.git/
+.gitignore
+*.log
+Dockerfile
+.dockerignore
