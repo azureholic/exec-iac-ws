@@ -78,8 +78,12 @@ dist-ssr/
 !.env.example
 
 # ── Bicep / Azure deploy artefacts ───────────────────────────────────────────
-# Compiled ARM JSON next to .bicep files
+# Compiled ARM JSON next to .bicep files (legacy naming, kept for safety)
 **/*.bicep.json
+# Compiled output of `az bicep build foo.bicep` (sibling .json).
+# All parameter files in this repo are .bicepparam, so blanket-ignoring
+# .json under infra/ is safe.
+infra/**/*.json
 # Bicep build cache
 .bicep/
 # Local what-if / deployment output captures
@@ -114,3 +118,5 @@ secrets/
 
 # ── Local working notes (not part of the workshop) ───────────────────────────
 WORKSHOP-REVIEW-TODO.md
+# Ad-hoc scratch capture files (FQDNs, command output snippets, etc.)
+*.tmp.txt
