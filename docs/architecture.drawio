@@ -1,0 +1,194 @@
+<mxfile host="app.diagrams.net" modified="2026-01-01T00:00:00.000Z" agent="copilot" version="24.0.0">
+  <diagram id="hotel-multi-env" name="Hotel Workload — test + prod">
+    <mxGraphModel dx="2200" dy="1400" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1700" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- TITLE -->
+        <mxCell id="title" value="Hotel-booking workload — test and prod (one Bicep template, two parameter files)" style="text;html=1;align=center;verticalAlign=middle;fontSize=18;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="1620" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- ===== INTERNET + USERS ===== -->
+        <mxCell id="internet" value="Public internet" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="80" width="180" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="users" value="Anonymous users (browser)" style="shape=actor;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="80" y="160" width="100" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- ===== HUB RG ===== -->
+        <mxCell id="hub-rg" value="rg-platform   (hub)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#9673A6;strokeWidth=2;dashed=1;verticalAlign=top;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="660" y="80" width="380" height="180" as="geometry" />
+        </mxCell>
+        <mxCell id="hub-vnet" value="vnet-hub&#xa;192.168.100.0/24" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673A6;strokeWidth=2;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="700" y="130" width="300" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="hub-note" value="Shared hub VNet&#xa;(peering hub only — PDZ stays per-spoke)" style="text;html=1;align=center;verticalAlign=middle;fontSize=10;fontStyle=2;" vertex="1" parent="1">
+          <mxGeometry x="700" y="180" width="300" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- ===== TEST RG ===== -->
+        <mxCell id="test-rg" value="rg-hotel-test   (workload spoke)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#82B366;strokeWidth=2;dashed=1;verticalAlign=top;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="310" width="780" height="730" as="geometry" />
+        </mxCell>
+        <mxCell id="test-spoke" value="vnet-hotel-test&#xa;10.10.0.0/22" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=2;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="60" y="350" width="740" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="test-subnets" value="snet-aca-hotel-test 10.10.2.0/23    •    snet-pe-hotel-test 10.10.0.0/26" style="text;html=1;align=center;verticalAlign=middle;fontSize=10;fontStyle=2;" vertex="1" parent="1">
+          <mxGeometry x="60" y="385" width="740" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- TEST ACA env -->
+        <mxCell id="test-cae" value="cae-hotel-test-swc&#xa;(Workload Profiles, NOT zone-redundant)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;strokeWidth=2;verticalAlign=top;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="430" width="430" height="220" as="geometry" />
+        </mxCell>
+        <mxCell id="test-web" value="ca-hotelweb-test-swc-001&#xa;public ingress   •   min 0 / max 3&#xa;nginx → /api proxy" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="80" y="475" width="190" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="test-api" value="ca-hotelapi-test-swc-001&#xa;internal ingress   •   min 1 / max 3&#xa;.NET 10 API" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="290" y="475" width="190" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="test-web-api-edge" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#6c8ebf;strokeWidth=2;endArrow=classic;html=1;" edge="1" parent="1" source="test-web" target="test-api">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="test-cae-note" value="env-internal /api hop (no public surface on API)" style="text;html=1;align=center;verticalAlign=middle;fontSize=9;fontStyle=2;" vertex="1" parent="1">
+          <mxGeometry x="80" y="565" width="400" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="test-uami-rt" value="id-hotel-test-rt&#xa;(runtime UAMI&#xa;= SQL Entra admin&#xa;+ ACR pull)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673A6;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="80" y="595" width="180" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="test-uami-cicd" value="id-hotel-test-cicd&#xa;(CI/CD UAMI)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673A6;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="300" y="595" width="180" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- TEST private PaaS -->
+        <mxCell id="test-sql" value="sql-hotel-test-* / sqldb-hotel-test&#xa;GP_S Gen5 1 vCore   •   auto-pause 60 min&#xa;single-zone   •   Entra-only auth" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="540" y="450" width="240" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="test-kv" value="kv-hotel-test-*&#xa;public access disabled&#xa;reached via private endpoint" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673A6;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="540" y="565" width="240" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="test-pe-note" value="PEs in snet-pe-hotel-test (10.10.0.0/26)" style="text;html=1;align=center;verticalAlign=middle;fontSize=9;fontStyle=2;" vertex="1" parent="1">
+          <mxGeometry x="540" y="650" width="240" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- TEST Private DNS -->
+        <mxCell id="test-dns" value="Private DNS (per-env, in this RG)&#xa;privatelink.database.windows.net&#xa;privatelink.vaultcore.azure.net&#xa;→ linked to vnet-hotel-test only" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;verticalAlign=top;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="685" width="720" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- TEST public shared -->
+        <mxCell id="test-acr" value="crhoteltest*&#xa;ACR Standard, Allow All Networks&#xa;(image pull via runtime UAMI)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="60" y="785" width="240" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="test-log" value="log-hotel-test-swc&#xa;Log Analytics (30d retention)&#xa;public ingestion" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="320" y="785" width="220" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="test-ai" value="appi-hotel-test-swc&#xa;App Insights (workspace-based)&#xa;public ingestion" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="560" y="785" width="220" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- TEST param file callout -->
+        <mxCell id="test-params" value="workload.test.bicepparam&#xa;• apiMin/Max = 1/3   webMin/Max = 0/3&#xa;• containerAppsEnvZoneRedundant = false&#xa;• sqlDatabaseSku = GP_S_Gen5 capacity 1&#xa;• sqlAutoPauseDelayMinutes = 60&#xa;• sqlDatabaseZoneRedundant = false&#xa;• logAnalyticsRetentionDays = 30" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;verticalAlign=top;fontStyle=1;align=left;spacingLeft=10;spacingTop=4;" vertex="1" parent="1">
+          <mxGeometry x="60" y="890" width="720" height="130" as="geometry" />
+        </mxCell>
+
+        <!-- ===== PROD RG ===== -->
+        <mxCell id="prod-rg" value="rg-hotel-prod   (workload spoke)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#B85450;strokeWidth=2;dashed=1;verticalAlign=top;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="880" y="310" width="780" height="730" as="geometry" />
+        </mxCell>
+        <mxCell id="prod-spoke" value="vnet-hotel-prod&#xa;10.20.0.0/22" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;strokeWidth=2;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="900" y="350" width="740" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="prod-subnets" value="snet-aca-hotel-prod 10.20.2.0/23    •    snet-pe-hotel-prod 10.20.0.0/26" style="text;html=1;align=center;verticalAlign=middle;fontSize=10;fontStyle=2;" vertex="1" parent="1">
+          <mxGeometry x="900" y="385" width="740" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- PROD ACA env -->
+        <mxCell id="prod-cae" value="cae-hotel-prod-swc&#xa;(Workload Profiles, ZONE-REDUNDANT)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;strokeWidth=3;verticalAlign=top;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="900" y="430" width="430" height="220" as="geometry" />
+        </mxCell>
+        <mxCell id="prod-web" value="ca-hotelweb-prod-swc-001&#xa;public ingress   •   min 3 / max 10&#xa;1 replica per AZ" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=2;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="920" y="475" width="190" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="prod-api" value="ca-hotelapi-prod-swc-001&#xa;internal ingress   •   min 3 / max 10&#xa;1 replica per AZ" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;strokeWidth=2;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1130" y="475" width="190" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="prod-web-api-edge" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#6c8ebf;strokeWidth=2;endArrow=classic;html=1;" edge="1" parent="1" source="prod-web" target="prod-api">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="prod-cae-note" value="env-internal /api hop (no public surface on API)" style="text;html=1;align=center;verticalAlign=middle;fontSize=9;fontStyle=2;" vertex="1" parent="1">
+          <mxGeometry x="920" y="565" width="400" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="prod-uami-rt" value="id-hotel-prod-rt&#xa;(runtime UAMI&#xa;= SQL Entra admin&#xa;+ ACR pull)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673A6;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="920" y="595" width="180" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="prod-uami-cicd" value="id-hotel-prod-cicd&#xa;(CI/CD UAMI)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673A6;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="1140" y="595" width="180" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- PROD private PaaS -->
+        <mxCell id="prod-sql" value="sql-hotel-prod-* / sqldb-hotel-prod&#xa;GP_S Gen5 2 vCore   •   NO auto-pause&#xa;ZONE-REDUNDANT   •   Entra-only auth" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;strokeWidth=2;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1380" y="450" width="240" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="prod-kv" value="kv-hotel-prod-*&#xa;public access disabled&#xa;reached via private endpoint" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673A6;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1380" y="565" width="240" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="prod-pe-note" value="PEs in snet-pe-hotel-prod (10.20.0.0/26)" style="text;html=1;align=center;verticalAlign=middle;fontSize=9;fontStyle=2;" vertex="1" parent="1">
+          <mxGeometry x="1380" y="650" width="240" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- PROD Private DNS -->
+        <mxCell id="prod-dns" value="Private DNS (per-env, in this RG)&#xa;privatelink.database.windows.net&#xa;privatelink.vaultcore.azure.net&#xa;→ linked to vnet-hotel-prod only" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;verticalAlign=top;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="900" y="685" width="720" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- PROD public shared -->
+        <mxCell id="prod-acr" value="crhotelprod*&#xa;ACR Standard, Allow All Networks&#xa;(image pull via runtime UAMI)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="900" y="785" width="240" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="prod-log" value="log-hotel-prod-swc&#xa;Log Analytics (90d retention)&#xa;public ingestion" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1160" y="785" width="220" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="prod-ai" value="appi-hotel-prod-swc&#xa;App Insights (workspace-based)&#xa;public ingestion" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1400" y="785" width="220" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- PROD param file callout -->
+        <mxCell id="prod-params" value="workload.prod.bicepparam&#xa;• apiMin/Max = 3/10   webMin/Max = 3/10&#xa;• containerAppsEnvZoneRedundant = true&#xa;• sqlDatabaseSku = GP_S_Gen5 capacity 2&#xa;• sqlAutoPauseDelayMinutes = -1 (disabled)&#xa;• sqlDatabaseZoneRedundant = true&#xa;• logAnalyticsRetentionDays = 90" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;verticalAlign=top;fontStyle=1;align=left;spacingLeft=10;spacingTop=4;" vertex="1" parent="1">
+          <mxGeometry x="900" y="890" width="720" height="130" as="geometry" />
+        </mxCell>
+
+        <!-- ===== EDGES ===== -->
+        <!-- internet user → hub (just visual) -->
+        <mxCell id="user-test-edge" value="HTTPS" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#6c8ebf;strokeWidth=2;endArrow=classic;html=1;fontSize=10;" edge="1" parent="1" source="users" target="test-web">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="user-prod-edge" value="HTTPS" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#b85450;strokeWidth=2;endArrow=classic;html=1;fontSize=10;" edge="1" parent="1" source="users" target="prod-web">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- spoke ↔ hub peerings -->
+        <mxCell id="peer-test" value="bi-directional VNet peering&#xa;(spoke ↔ hub only)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#82B366;strokeWidth=3;endArrow=classicThin;startArrow=classicThin;html=1;fontSize=10;fontStyle=1;" edge="1" parent="1" source="test-spoke" target="hub-vnet">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="peer-prod" value="bi-directional VNet peering&#xa;(spoke ↔ hub only)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#B85450;strokeWidth=3;endArrow=classicThin;startArrow=classicThin;html=1;fontSize=10;fontStyle=1;" edge="1" parent="1" source="prod-spoke" target="hub-vnet">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- No test↔prod edge to emphasise isolation -->
+        <mxCell id="isolation-note" value="✕  test spoke ↔ prod spoke   NOT peered&#xa;blast-radius isolation between environments" style="text;html=1;align=center;verticalAlign=middle;fontSize=11;fontStyle=1;fontColor=#B85450;" vertex="1" parent="1">
+          <mxGeometry x="660" y="1010" width="380" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- legend -->
+        <mxCell id="legend" value="Legend:&#xa;blue = public/shared    green = test    red = prod    yellow = data    purple = identity / DNS&#xa;Bicep: one main.bicep + two .bicepparam files     • Zero env if-branches" style="text;html=1;align=left;verticalAlign=middle;fontSize=10;fontStyle=2;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1050" width="1620" height="40" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
