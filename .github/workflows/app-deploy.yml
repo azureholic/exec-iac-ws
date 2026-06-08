@@ -152,9 +152,9 @@ jobs:
           web_image="${{ needs.build.outputs.web_image }}"
 
           dep=$(az deployment group list -g "$rg" \
-            --query "sort_by([?properties.provisioningState=='Succeeded' && starts_with(name, 'spoke-test-')], &properties.timestamp)[-1].name" -o tsv)
+            --query "sort_by([?properties.provisioningState=='Succeeded' && properties.outputs.apiContainerAppName.value != null && properties.outputs.webContainerAppName.value != null], &properties.timestamp)[-1].name" -o tsv)
           if [ -z "$dep" ] || [ "$dep" = "None" ]; then
-            echo "::error::No succeeded 'spoke-test-*' deployment found in $rg. Run infra-deploy.yml first."
+            echo "::error::No succeeded workload deployment with container app outputs found in $rg. Run infra/workload/Deploy-Workload.ps1 for test first."
             exit 1
           fi
           outputs=$(az deployment group show -g "$rg" -n "$dep" --query properties.outputs -o json)
@@ -221,9 +221,9 @@ jobs:
           set -euo pipefail
           rg="${{ vars.AZURE_RESOURCE_GROUP }}"
           dep=$(az deployment group list -g "$rg" \
-            --query "sort_by([?properties.provisioningState=='Succeeded' && starts_with(name, 'spoke-prod-')], &properties.timestamp)[-1].name" -o tsv)
+            --query "sort_by([?properties.provisioningState=='Succeeded' && properties.outputs.apiContainerAppName.value != null && properties.outputs.webContainerAppName.value != null && properties.outputs.containerRegistryName.value != null && properties.outputs.containerRegistryLoginServer.value != null], &properties.timestamp)[-1].name" -o tsv)
           if [ -z "$dep" ] || [ "$dep" = "None" ]; then
-            echo "::error::No succeeded 'spoke-prod-*' deployment found in $rg. Run infra-deploy.yml first."
+            echo "::error::No succeeded workload deployment with app/registry outputs found in $rg. Run infra/workload/Deploy-Workload.ps1 for prod first."
             exit 1
           fi
           outputs=$(az deployment group show -g "$rg" -n "$dep" --query properties.outputs -o json)
